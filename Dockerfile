@@ -11,4 +11,4 @@ RUN wget -P cfg/ 'https://pjreddie.com/media/files/yolov3.weights'
 COPY . .
 
 
-CMD [ "python", "/hikalert/app/run.py hikalert.py" ]
+CMD [ "python", "/hikalert/app/run.py" ]

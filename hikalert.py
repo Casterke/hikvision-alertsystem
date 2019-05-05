@@ -15,8 +15,20 @@ import numpy as np
 import requests
 from requests.auth import HTTPDigestAuth
 
+# CONFIGS START
 config = configparser.ConfigParser()
 config.read('cfg/config.ini')
+APP_PATH = config['DEFAULT']['APP_PATH']
+NVR_URL = config['DEFAULT']['NVR_URL']
+NVR_USR = config['DEFAULT']['NVR_USR']
+NVR_PASS = config['DEFAULT']['NVR_PASS']
+OPENCV_WEIGHTS = config['DEFAULT']['OPENCV_WEIGHTS']
+OPENCV_CLASS = config['DEFAULT']['OPENCV_CLASS']
+OPENCV_CONFIG = config['DEFAULT']['OPENCV_CONFIG']
+GMAIL_EMAIL = config['DEFAULT']['GMAIL_EMAIL']
+GMAIL_PASS = config['DEFAULT']['GMAIL_PASS']
+EMAIL_RECEIVERS = config['DEFAULT']['EMAIL_RECEIVERS']
+# CONFIGS ENDS
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 XML_NAMESPACE = 'http://www.hikvision.com/ver20/XMLSchema'
@@ -26,11 +38,13 @@ DEFAULT_HEADERS = {
     'Accept': "*/*"
 }
 
-url = '%s/ISAPI/Event/notification/alertStream' % config['DEFAULT']['NVR_URL']
-
 hik_request = requests.Session()
-hik_request.auth = HTTPDigestAuth(config['DEFAULT']['NVR_USR'], config['DEFAULT']['NVR_PASS'])
+hik_request.auth = HTTPDigestAuth(NVR_USR, NVR_PASS)
 hik_request.headers.update(DEFAULT_HEADERS)
+
+url = NVR_URL + '/ISAPI/Event/notification/alertStream'
+
+print(EMAIL_RECEIVERS)
 
 
 def draw_prediction(img, object_name, object_confidence, x, y, x_plus_w, y_plus_h):
@@ -51,9 +65,9 @@ def recognize_image(input_image_name, output_image_name):
     width = image.shape[1]
     height = image.shape[0]
 
-    opencv_weights = (config['DEFAULT']['APP_PATH'] + config['DEFAULT']['OPENCV_WEIGHTS'])
-    opencv_config = (config['DEFAULT']['APP_PATH'] + config['DEFAULT']['OPENCV_CONFIG'])
-    opencv_classes = (config['DEFAULT']['APP_PATH'] + config['DEFAULT']['OPENCV_CLASS'])
+    opencv_weights = (APP_PATH + OPENCV_WEIGHTS)
+    opencv_config = (APP_PATH + OPENCV_CONFIG)
+    opencv_classes = (APP_PATH + OPENCV_CLASS)
 
     classes = None
     with open(opencv_classes, 'r') as f:
@@ -112,8 +126,8 @@ def send_mail_attachment(send_to, subject, text, file=None):
     assert isinstance(send_to, list)
 
     # Gmail Sign In
-    gmail_sender = config['DEFAULT']['GMAIL_EMAIL']
-    gmail_passwd = config['DEFAULT']['GMAIL_PASS']
+    gmail_sender = GMAIL_EMAIL
+    gmail_passwd = GMAIL_PASS
 
     msg = MIMEMultipart()
     msg['From'] = gmail_sender
@@ -141,41 +155,16 @@ def send_mail_attachment(send_to, subject, text, file=None):
     smtp.quit()
 
 
-def send_email(now, channel_id, objects):
-    TO = 'joellupfer@gmail.com'
-    TEXT = ('Date: %s in the %s channel_id is a(n) %s recognized' % (now, channel_id, objects))
-    SUBJECT = 'Event triggered an email from python'
-
-    # Gmail Sign In
-    gmail_sender = 'casterlupfer76@gmail.com'
-    gmail_passwd = 'zcwqgnfotadntkzp'
-
-    server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.ehlo()
-    server.starttls()
-    server.login(gmail_sender, gmail_passwd)
-
-    BODY = '\r\n'.join(['To: %s' % TO, 'From: %s' % gmail_sender, 'Subject: %s' % SUBJECT, '', TEXT])
-
-    try:
-        server.sendmail(gmail_sender, [TO], BODY)
-        print('email sent')
-    except:
-        print('error sending mail')
-
-    server.quit()
-    return
-
-
 def download_snapshot(date, channel_id):
-    picture_url = '%s/ISAPI/Streaming/channels/%s01/picture?' \
+    picture_url = NVR_URL + \
+                  '/ISAPI/Streaming/channels/%s01/picture?' \
                   'videoResolutionWidth=1920&' \
-                  'videoResolutionHeight=1080' % (config['DEFAULT']['NVR_URL'], channel_id)
+                  'videoResolutionHeight=1080' % channel_id
 
     r = hik_request.get(picture_url, stream=True)
     if r.status_code == 200:
         print('%s - Downloaded snapshot successfully' % date)
-        with open('/web/webalert/snapshot/%s-channel-%s.jpg' % (date, channel_id), 'wb') as f:
+        with open(APP_PATH + '/snapshot/%s-channel-%s.jpg' % (date, channel_id), 'wb') as f:
             f.write(r.content)
         return '%s-channel-%s.jpg' % (date, channel_id)
 
@@ -184,8 +173,8 @@ def download_snapshot(date, channel_id):
 
 def process_snapshot(date, channel_id):
     snapshot_filename = download_snapshot(date.strftime("%Y-%m-%d_%H-%M-%S"), channel_id)
-    process_input_path = "%s/snapshot/%s" % (config['DEFAULT']['APP_PATH'], snapshot_filename)
-    process_output_path = "%s/output/%s" % (config['DEFAULT']['APP_PATH'], snapshot_filename)
+    process_input_path = APP_PATH + "/snapshot/%s" % snapshot_filename
+    process_output_path = APP_PATH + "/output/%s" % snapshot_filename
 
     if snapshot_filename is False:
         return
@@ -195,7 +184,7 @@ def process_snapshot(date, channel_id):
 
     rec_objects = recognize_image(process_input_path, process_output_path)
     attachment_file = process_output_path
-    send_to = config['DEFAULT']['EMAIL_RECEIVERS']
+    send_to = EMAIL_RECEIVERS
 
     if rec_objects != '':
         print('Sending an email because we recognize these: %s' % rec_objects)
