@@ -1,6 +1,8 @@
 FROM python:3.7
 MAINTAINER joel.lupfer@gmail.com
 
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /hikalert/app
 
 COPY requirements.txt ./
