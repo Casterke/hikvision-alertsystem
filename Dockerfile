@@ -14,4 +14,6 @@ COPY . .
 
 VOLUME /config
 
+VOLUME /output
+
 CMD [ "python","-u","/hikalert/app/run.py" ]

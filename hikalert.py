@@ -38,7 +38,6 @@ GMAIL_PASS = config['DEFAULT']['GMAIL_PASS']
 EMAIL_RECEIVERS = config['DEFAULT']['EMAIL_RECEIVERS']
 # CONFIGS ENDS
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 XML_NAMESPACE = 'http://www.hikvision.com/ver20/XMLSchema'
 
 DEFAULT_HEADERS = {
@@ -182,7 +181,7 @@ def download_snapshot(date, channel_id):
 def process_snapshot(date, channel_id):
     snapshot_filename = download_snapshot(date.strftime("%Y-%m-%d_%H-%M-%S"), channel_id)
     process_input_path = APP_PATH + "/snapshot/%s" % snapshot_filename
-    process_output_path = APP_PATH + "/output/%s" % snapshot_filename
+    process_output_path = "/output/%s" % snapshot_filename
 
     if snapshot_filename is False:
         return
