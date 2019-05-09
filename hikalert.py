@@ -16,6 +16,8 @@ import numpy as np
 import requests
 from requests.auth import HTTPDigestAuth
 
+print("Hikvision alert started")
+
 # CONFIGS START
 config = configparser.ConfigParser()
 exists = os.path.isfile('/config/config.ini')
@@ -51,7 +53,7 @@ hik_request.headers.update(DEFAULT_HEADERS)
 
 url = NVR_URL + '/ISAPI/Event/notification/alertStream'
 
-print(EMAIL_RECEIVERS)
+print("Email address to send the notification:" + EMAIL_RECEIVERS)
 
 
 def draw_prediction(img, object_name, object_confidence, x, y, x_plus_w, y_plus_h):
@@ -240,7 +242,6 @@ while True:
                             channelID = tree.find('{%s}%s' % (XML_NAMESPACE, 'dynChannelID'))
 
                         if channelID.text == '0':
-                            # print('continue')
                             parse_string = ""
                             continue
 
@@ -250,7 +251,9 @@ while True:
 
                         current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                        # if channelID.text != '0':
+                        print('%s - count: %s event: %s eventState: %s channel_id: %s ' % (
+                            current_date, postCount.text, eventType.text, eventState.text,
+                            channelID.text))
                         if eventType.text == 'linedetection':
                             # Only trigger the event if the event not repeated in 5 sec
                             if detection_date < datetime.datetime.now() - datetime.timedelta(seconds=5):
