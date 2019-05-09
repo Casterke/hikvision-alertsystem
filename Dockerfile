@@ -14,4 +14,4 @@ COPY . .
 
 VOLUME /config
 
-CMD [ "python", "/hikalert/app/run.py" ]
+CMD [ "python","-u","/hikalert/app/run.py" ]
