@@ -9,6 +9,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import COMMASPACE, formatdate
 from os.path import basename
+from shutil import copyfile
 
 import cv2
 import numpy as np
@@ -17,7 +18,14 @@ from requests.auth import HTTPDigestAuth
 
 # CONFIGS START
 config = configparser.ConfigParser()
-config.read('cfg/config.ini')
+exists = os.path.isfile('/config/config.ini')
+
+if exists:
+    config.read('/config/config.ini')
+else:
+    copyfile('cfg/config.ini', '/config/config.ini')
+    config.read('/config/config.ini')
+
 APP_PATH = config['DEFAULT']['APP_PATH']
 NVR_URL = config['DEFAULT']['NVR_URL']
 NVR_USR = config['DEFAULT']['NVR_USR']
