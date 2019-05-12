@@ -90,7 +90,7 @@ while True:
                         print('%s - count: %s event: %s eventState: %s channel_id: %s ' % (
                             current_date, postCount.text, eventType.text, eventState.text,
                             channelID.text))
-                        if eventType.text == 'VMD':
+                        if eventType.text == 'linedetection':
                             # Only trigger the event if the event not repeated in 5 sec
                             if (detection_date < datetime.datetime.now() - datetime.timedelta(
                                     seconds=5)) and (detection_id != channelID):
