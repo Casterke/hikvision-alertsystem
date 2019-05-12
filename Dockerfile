@@ -6,6 +6,7 @@ ENV PYTHONUNBUFFERED=0
 WORKDIR /hikalert/app
 
 COPY requirements.txt ./
+
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 RUN wget -P cfg/ 'https://pjreddie.com/media/files/yolov3.weights'
@@ -18,4 +19,6 @@ VOLUME /config
 
 VOLUME /output
 
-CMD [ "python","-u","/hikalert/app/hikalert.py" ]
+VOLUME /snapshot
+
+CMD [ "python","-u","/hikalert/app/run.py" ]

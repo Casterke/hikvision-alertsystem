@@ -2,30 +2,24 @@ import configparser
 import datetime
 import os
 import smtplib
-import time
-import xml.etree.ElementTree as ET
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import COMMASPACE, formatdate
 from os.path import basename
-from shutil import copyfile
-
 import cv2
 import numpy as np
 import requests
 from requests.auth import HTTPDigestAuth
+import sys
 
-print("Hikvision alert started")
+print("Subprocess started")
 
 # CONFIGS START
 config = configparser.ConfigParser()
 exists = os.path.isfile('/config/config.ini')
 
 if exists:
-    config.read('/config/config.ini')
-else:
-    copyfile('cfg/config.ini', '/config/config.ini')
     config.read('/config/config.ini')
 
 APP_PATH = config['DEFAULT']['APP_PATH']
@@ -37,7 +31,8 @@ OPENCV_CLASS = config['DEFAULT']['OPENCV_CLASS']
 OPENCV_CONFIG = config['DEFAULT']['OPENCV_CONFIG']
 GMAIL_EMAIL = config['DEFAULT']['GMAIL_EMAIL']
 GMAIL_PASS = config['DEFAULT']['GMAIL_PASS']
-EMAIL_RECEIVERS = config['DEFAULT']['EMAIL_RECEIVERS']
+EMAIL_RECEIVERS = (config['DEFAULT']['EMAIL_RECEIVERS']).split()
+
 # CONFIGS ENDS
 
 XML_NAMESPACE = 'http://www.hikvision.com/ver20/XMLSchema'
@@ -52,8 +47,6 @@ hik_request.auth = HTTPDigestAuth(NVR_USR, NVR_PASS)
 hik_request.headers.update(DEFAULT_HEADERS)
 
 url = NVR_URL + '/ISAPI/Event/notification/alertStream'
-
-print("Email address to send the notification:" + EMAIL_RECEIVERS)
 
 
 def draw_prediction(img, object_name, object_confidence, x, y, x_plus_w, y_plus_h):
@@ -146,14 +139,18 @@ def send_mail_attachment(send_to, subject, text, file=None):
 
     msg.attach(MIMEText(text))
 
-    with open(file, "rb") as fil:
-        part = MIMEApplication(
-            fil.read(),
-            Name=basename(file)
-        )
-    # After the file is closed
-    part['Content-Disposition'] = 'attachment; filename="%s"' % basename(file)
-    msg.attach(part)
+    # If the file exist than open and attach to the email, otherwise attach an error message to the content
+    if os.path.exists(file):
+        with open(file, "rb") as fil:
+            part = MIMEApplication(
+                fil.read(),
+                Name=basename(file)
+            )
+            # After the file is closed
+            part['Content-Disposition'] = 'attachment; filename="%s"' % basename(file)
+            msg.attach(part)
+    else:
+        print('Error: File does not exists. file:' + file)
 
     smtp = smtplib.SMTP('smtp.gmail.com', 587)
     smtp.ehlo()
@@ -173,22 +170,23 @@ def download_snapshot(date, channel_id):
     r = hik_request.get(picture_url, stream=True)
     if r.status_code == 200:
         print('%s - Downloaded snapshot successfully' % date)
-        with open(APP_PATH + '/snapshot/%s-channel-%s.jpg' % (date, channel_id), 'wb') as f:
+        with open('/snapshot/%s-channel-%s.jpg' % (date, channel_id), 'wb') as f:
             f.write(r.content)
         return '%s-channel-%s.jpg' % (date, channel_id)
 
     return False
 
 
-def process_snapshot(date, channel_id):
+def process_snapshot(channel_id):
+    date = datetime.datetime.now()
     snapshot_filename = download_snapshot(date.strftime("%Y-%m-%d_%H-%M-%S"), channel_id)
-    process_input_path = APP_PATH + "/snapshot/%s" % snapshot_filename
-    process_output_path = "/output/%s" % snapshot_filename
+    process_input_path = '/snapshot/%s' % snapshot_filename
+    process_output_path = '/output/%s' % snapshot_filename
 
     if snapshot_filename is False:
         return
 
-    if channelID is False:
+    if channel_id is False:
         return
 
     rec_objects = recognize_image(process_input_path, process_output_path)
@@ -201,76 +199,21 @@ def process_snapshot(date, channel_id):
             date.strftime("%Y-%m-%d %H:%M:%S"), channel_id, rec_objects))
         send_mail_attachment(send_to, 'Python script detected movement', text, attachment_file)
     else:
-        print('Not recognized anything so not sending an email')
+        print('Not recognized anything so delete the snapshot and output')
+        # As file at filePath is deleted now, so we should check if file exists or not not before deleting them
+        if os.path.exists(process_input_path):
+            os.remove(process_input_path)
+        if os.path.exists(process_output_path):
+            os.remove(process_output_path)
+        else:
+            print('Can not delete the file as it doesn\'t exists')
     return
 
 
-parse_string = ''
-start_event = False
-fail_count = 0
+# Process the arguments
 
-detection_date = datetime.datetime.now()
-
-while True:
-
-    try:
-        stream = hik_request.get(url, stream=True, timeout=(5, 60))
-
-        if stream.status_code != requests.codes.ok:
-            raise ValueError('Connection unsuccessful.')
-        else:
-            print('Connection Successful.')
-            fail_count = 0
-
-        for line in stream.iter_lines():
-            # filter out keep-alive new lines
-            if line:
-                str_line = line.decode("utf-8")
-
-                if str_line.find('<EventNotificationAlert') != -1:
-                    start_event = True
-                    parse_string += str_line
-                elif str_line.find('</EventNotificationAlert>') != -1:
-                    parse_string += str_line
-                    start_event = False
-                    if parse_string:
-                        tree = ET.fromstring(parse_string)
-
-                        channelID = tree.find('{%s}%s' % (XML_NAMESPACE, 'channelID'))
-                        if channelID is None:
-                            # Some devices use a different key
-                            channelID = tree.find('{%s}%s' % (XML_NAMESPACE, 'dynChannelID'))
-
-                        if channelID.text == '0':
-                            parse_string = ""
-                            continue
-
-                        eventType = tree.find('{%s}%s' % (XML_NAMESPACE, 'eventType'))
-                        eventState = tree.find('{%s}%s' % (XML_NAMESPACE, 'eventState'))
-                        postCount = tree.find('{%s}%s' % (XML_NAMESPACE, 'activePostCount'))
-
-                        current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-                        print('%s - count: %s event: %s eventState: %s channel_id: %s ' % (
-                            current_date, postCount.text, eventType.text, eventState.text,
-                            channelID.text))
-                        if eventType.text == 'linedetection':
-                            # Only trigger the event if the event not repeated in 5 sec
-                            if detection_date < datetime.datetime.now() - datetime.timedelta(seconds=5):
-                                print('%s - count: %s event: %s eventState: %s channel_id: %s ' % (
-                                    current_date, postCount.text, eventType.text, eventState.text,
-                                    channelID.text))
-                                detection_date = datetime.datetime.now()
-                                # start the snapshot process
-                                process_snapshot(detection_date, channelID.text)
-
-                        parse_string = ""
-
-                else:
-                    if start_event:
-                        parse_string += str_line
-
-    except (ValueError, requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as err:
-        fail_count += 1
-        time.sleep(fail_count * 5)
-        continue
+if len(sys.argv) > 1:
+    ch_id = sys.argv[1]
+    process_snapshot(ch_id)
+else:
+    print('Error: Channel id not defined.')
