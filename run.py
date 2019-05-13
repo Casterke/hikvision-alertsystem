@@ -88,19 +88,19 @@ while True:
                         postCount = tree.find('{%s}%s' % (XML_NAMESPACE, 'activePostCount'))
 
                         current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        log_file.write('%s - count: %s event: %s eventState: %s channel_id: %s' % (current_date, postCount.text, eventType.text, eventState.text, channelID.text))
+                        log_file.write('%s - count: %s event: %s eventState: %s channel_id: %s\n' % (current_date, postCount.text, eventType.text, eventState.text, channelID.text))
                         if eventType.text == 'linedetection':
                             # Only trigger the event if the event not repeated in 5 sec
                             if (detection_date < datetime.datetime.now() - datetime.timedelta(
                                     seconds=5)) and (detection_id != channelID):
-                                log_file.write('count: %s (triggered)' % postCount.text)
+                                log_file.write('count: %s (triggered)\n' % postCount.text)
                                 detection_date = datetime.datetime.now()
                                 detection_id = channelID.text
                                 # start the subprocess to process by channelID
                                 p = Popen('python ' + APP_PATH + '/image_process.py ' + channelID.text,
                                           shell=True)
                             else:
-                                log_file.write('count: %s last detection time: %s last channel id:  (not triggered to process)' % (postCount.text, detection_date.strftime("%Y-%m-%d %H:%M:%S"), detection_id))
+                                log_file.write('count: %s last detection time: %s last channel id:  (not triggered to process)\n' % (postCount.text, detection_date.strftime("%Y-%m-%d %H:%M:%S"), detection_id))
 
                         # Clear the chunk
                         parse_string = ""
