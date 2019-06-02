@@ -6,11 +6,9 @@ The script will send an email message with the image attached if anything recogn
 [Docker]
 In order to make it work with docker you need to attach some volume. (config, output, snapshot)
 
-Todo:
--Improve script error handling
--Improve script speed
--Simplify installation by docker
--Refactor config
-- ...
+- [ ] Improve script error handling
+- [ ] Improve script speed
+- [ ] Simplify installation by docker
+- [ ] Refactor code
 
 <p><a href="https://registry.hub.docker.com/u/casterke/hikvision-alertsystem/"><img src="http://dockeri.co/image/casterke/hikvision-alertsystem" alt="docker" title="docker"></a></p>
