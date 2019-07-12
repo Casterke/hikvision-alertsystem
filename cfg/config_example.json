@@ -1,0 +1,23 @@
+{
+    "nvr":{
+        "url": "http://x.x.x.x",
+        "user": "nvradmin",
+        "pass": "password"
+    },
+    "opencv":{
+        "weights": "yolov3.weights",
+        "class": "yolov3.txt",
+        "config": "yolov3.cfg"
+    },
+    "pushbullet": {
+        "api_key": "x.EXAMPLEdssadasdwe23453453ferwt354t354334"
+    },
+    "channels":{
+        "1": {
+            "alert_on": ["person","cat","dog"]
+        },
+        "2":{
+            "alert_on": ["person","cat","dog","bicycle"]
+        }
+    }
+}

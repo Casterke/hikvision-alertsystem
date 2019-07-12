@@ -1,1 +1,3 @@
-.idea/
+.vscode
+cfg/config.json
+cfg/yolov3.weights
