@@ -46,7 +46,8 @@ fail_count = 0
 detection_date = datetime.datetime.now()
 detection_id = '0'
 
-log_file = open("/config/log.txt", "a+")
+log_file_name = "log-" + detection_date.strftime("%Y-%m-%d")+".txt"
+log_file = open("/config/" + log_file_name, "a+")
 
 while True:
 
