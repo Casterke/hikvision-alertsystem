@@ -55,6 +55,7 @@ while True:
         stream = hik_request.get(url, stream=True, timeout=(5, 60))
 
         if stream.status_code != requests.codes.ok:
+            print("Can't connect to the stream!")
             raise ValueError('Connection unsuccessful.')
         else:
             print('Connection successful to: ' + NVR_URL)
@@ -92,6 +93,7 @@ while True:
                         log_file.write('%s - count: %s event: %s eventState: %s channel_id: %s\n' % (
                             current_date, postCount.text, eventType.text, eventState.text, channelID.text))
                         if eventType.text == 'linedetection':
+                            print("Line decetion triggered!")
                             # Only trigger the event if the event not repeated in 5 sec
                             if (detection_date < datetime.datetime.now() - datetime.timedelta(
                                     seconds=5)) and (detection_id != channelID):
