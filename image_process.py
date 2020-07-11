@@ -1,6 +1,7 @@
 import configparser
 import datetime
 import os
+import shutil
 import smtplib
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -182,6 +183,7 @@ def process_snapshot(channel_id):
     snapshot_filename = download_snapshot(date.strftime("%Y-%m-%d_%H-%M-%S"), channel_id)
     process_input_path = '/snapshot/%s' % snapshot_filename
     process_output_path = '/output/%s' % snapshot_filename
+    unrecognized_path = '/output/unrecognized/%s' % snapshot_filename
 
     if snapshot_filename is False:
         return
@@ -197,14 +199,14 @@ def process_snapshot(channel_id):
         print('Sending an email because we recognize these: %s' % rec_objects)
         text = ('Date: %s in the %s channel_id is a(n) %s recognized' % (
             date.strftime("%Y-%m-%d %H:%M:%S"), channel_id, rec_objects))
-        send_mail_attachment(send_to, 'Python script detected movement', text, attachment_file)
+        send_mail_attachment(send_to, 'Movement detected', text, attachment_file)
     else:
-        print('Not recognized anything so delete the snapshot and output')
-        # As file at filePath is deleted now, so we should check if file exists or not not before deleting them
+        print('Not recognized anything.')
+        #check the file before deleting/moving
         if os.path.exists(process_input_path):
             os.remove(process_input_path)
         if os.path.exists(process_output_path):
-            os.remove(process_output_path)
+            shutil.move(process_output_path, unrecognized_path)
         else:
             print('Can not delete the file as it doesn\'t exists')
     return
