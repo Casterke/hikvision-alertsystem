@@ -52,7 +52,7 @@ log_file = open("/config/" + log_file_name, "a+")
 while True:
 
     try:
-        stream = hik_request.get(url, stream=True, timeout=(5, 60))
+        stream = hik_request.get(url, stream=True, timeout=(5, 60), verify=False)
 
         if stream.status_code != requests.codes.ok:
             print("Can't connect to the stream!")
