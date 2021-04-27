@@ -168,7 +168,7 @@ def download_snapshot(date, channel_id):
                   'videoResolutionWidth=1920&' \
                   'videoResolutionHeight=1080' % channel_id
 
-    r = hik_request.get(picture_url, stream=True)
+    r = hik_request.get(picture_url, stream=True, timeout=(5, 60), verify=False)
     if r.status_code == 200:
         print('%s - Downloaded snapshot successfully' % date)
         with open('/snapshot/%s-channel-%s.jpg' % (date, channel_id), 'wb') as f:
