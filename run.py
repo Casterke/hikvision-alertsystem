@@ -95,18 +95,12 @@ while True:
                         if eventType.text == 'linedetection':
                             print("Line decetion triggered!")
                             # Only trigger the event if the event not repeated in 5 sec
-                            if (detection_date < datetime.datetime.now() - datetime.timedelta(
-                                    seconds=5)) and (detection_id != channelID):
-                                log_file.write('count: %s (triggered)\n' % postCount.text)
-                                detection_date = datetime.datetime.now()
-                                detection_id = channelID.text
-                                # start the subprocess to process by channelID
-                                p = Popen('python ' + APP_PATH + '/image_process.py ' + channelID.text,
-                                          shell=True)
-                            else:
-                                log_file.write(
-                                    'count: %s last detection time: %s last channel id: %s (not triggered)\n' % (
-                                        postCount.text, detection_date.strftime("%Y-%m-%d %H:%M:%S"), detection_id))
+                            log_file.write('count: %s (triggered)\n' % postCount.text)
+                            detection_date = datetime.datetime.now()
+                            detection_id = channelID.text
+                            # start the subprocess to process by channelID
+                            p = Popen('python ' + APP_PATH + '/image_process.py ' + channelID.text,
+                                      shell=True)
 
                         # Clear the chunk
                         parse_string = ""
