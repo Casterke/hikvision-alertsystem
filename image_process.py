@@ -100,8 +100,8 @@ def recognize_image(input_image_name, output_image_name):
                 confidences.append(float(confidence))
                 boxes.append([x, y, w, h])
 
-    conf_threshold = 0.5
-    nms_threshold = 0.4
+    conf_threshold = 0.6
+    nms_threshold = 0.5
     indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
 
     recognized_objects = ''
