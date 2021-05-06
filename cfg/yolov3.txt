@@ -11,6 +11,4 @@ bird
 cat
 dog
 horse
-sheep
-cow
 bear
