@@ -2,7 +2,8 @@ import configparser
 import datetime
 import os
 import time
-import xml.etree.ElementTree as ET
+#import xml.etree.ElementTree as ET
+import lxml.etree as ET
 from shutil import copyfile
 import requests
 from requests.auth import HTTPDigestAuth
@@ -73,6 +74,9 @@ while True:
                     parse_string += str_line
                     start_event = False
                     if parse_string:
+                        #tree = ET.fromstring(parse_string)
+                        # Use lxml instead of xml
+                        parser = ET.XMLParser(recover=True)                       
                         tree = ET.fromstring(parse_string)
 
                         channelID = tree.find('{%s}%s' % (XML_NAMESPACE, 'channelID'))
