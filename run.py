@@ -4,6 +4,7 @@ import os
 import time
 #import xml.etree.ElementTree as ET
 import lxml.etree as ET
+from io import StringIO, BytesIO
 from shutil import copyfile
 import requests
 from requests.auth import HTTPDigestAuth
@@ -77,7 +78,7 @@ while True:
                         #tree = ET.fromstring(parse_string)
                         # Use lxml instead of xml
                         parser = ET.XMLParser(recover=True)                       
-                        tree = ET.fromstring(parse_string)
+                        tree = ET.parse(StringIO(parse_string), parser=parser)
 
                         channelID = tree.find('{%s}%s' % (XML_NAMESPACE, 'channelID'))
                         if channelID is None:
