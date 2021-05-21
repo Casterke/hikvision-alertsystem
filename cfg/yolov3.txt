@@ -4,11 +4,7 @@ car
 motorcycle
 airplane
 bus
-train
 truck
-boat
 bird
 cat
 dog
-horse
-bear
