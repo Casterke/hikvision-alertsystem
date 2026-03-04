@@ -1,1 +1,7 @@
 .idea/
+.env
+data/
+config/
+*.pyc
+__pycache__/
+.web_secrets
