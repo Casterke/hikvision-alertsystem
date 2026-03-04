@@ -38,10 +38,12 @@ Web UI: http://localhost:5000
 ### Docker
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 Volumes: `./data` (SQLite, snapshots, events), `./config`
+
+If port 5000 is in use, edit `docker-compose.yml` and change the host port (e.g. `"5001:5000"`).
 
 ## License
 

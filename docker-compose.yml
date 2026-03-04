@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "5000:5000"
+      - "5008:5000"
     volumes:
       - ./data:/app/data
       - ./config:/config

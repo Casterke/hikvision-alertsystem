@@ -1,14 +1,30 @@
 """Main entry: ISAPI event stream + event sampler + web UI."""
+import logging
 import sys
 import threading
 import time
 from io import StringIO
 
+# Suppress HTTPS verification warnings (NVRs often use self-signed certs)
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Reduce Flask request logging
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+
 import lxml.etree as ET
 import requests
 from requests.auth import HTTPDigestAuth
 
-from src.config import NVR_PASS, NVR_URL, NVR_USR
+from src.live_feed import push_event, push_snapshots
+from src.config import (
+    NVR_CONNECT_TIMEOUT,
+    NVR_PASS,
+    NVR_RETRY_DELAY,
+    NVR_STREAM_READ_TIMEOUT,
+    NVR_URL,
+    NVR_USR,
+)
 from src.db import get_enabled_channels_and_events, init_db
 from src.event_sampler import sample_event_async
 from src.image_process import process_event
@@ -51,6 +67,7 @@ def _session():
 
 def _on_event_complete(event_id: str, channel_id: str, snapshot_paths: list):
     """Callback when event sampling is done."""
+    push_snapshots(event_id, channel_id, snapshot_paths)
     process_event(event_id, channel_id, snapshot_paths, "linedetection")
 
 
@@ -62,8 +79,11 @@ def _event_loop():
 
     while True:
         try:
-            enabled = get_enabled_channels_and_events()
-            stream = _session().get(url, stream=True, timeout=(5, 60))
+            stream = _session().get(
+                url,
+                stream=True,
+                timeout=(NVR_CONNECT_TIMEOUT, NVR_STREAM_READ_TIMEOUT),
+            )
             if stream.status_code != 200:
                 print("Can't connect to the stream!")
                 raise ValueError("Connection unsuccessful")
@@ -84,7 +104,9 @@ def _event_loop():
                         try:
                             parser = ET.XMLParser(recover=True)
                             tree = ET.parse(StringIO(parse_string), parser=parser)
-                            ch = tree.find(f"{{{XML_NAMESPACE}}}channelID") or tree.find(f"{{{XML_NAMESPACE}}}dynChannelID")
+                            ch = tree.find(f"{{{XML_NAMESPACE}}}channelID")
+                            if ch is None:
+                                ch = tree.find(f"{{{XML_NAMESPACE}}}dynChannelID")
                             if ch is None or not ch.text or ch.text == "0":
                                 parse_string = ""
                                 continue
@@ -92,8 +114,10 @@ def _event_loop():
                             event_type = et.text if et is not None else "linedetection"
                             channel_id = ch.text
 
+                            enabled = get_enabled_channels_and_events()
                             if (channel_id, event_type) in enabled:
                                 print("Event triggered:", event_type, "channel:", channel_id)
+                                push_event(channel_id, event_type)
                                 sample_event_async(channel_id, _on_event_complete)
                         except Exception as e:
                             print("Parse event error:", e)
@@ -101,10 +125,11 @@ def _event_loop():
                 elif start_event:
                     parse_string += str_line
 
-        except (ValueError, requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
+        except (ValueError, requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError, requests.exceptions.ReadTimeout) as e:
             fail_count += 1
-            print("Stream error:", e)
-            time.sleep(fail_count * 5)
+            delay = fail_count * NVR_RETRY_DELAY
+            print(f"Stream error (retry in {delay}s):", e)
+            time.sleep(delay)
 
 
 if __name__ == "__main__":

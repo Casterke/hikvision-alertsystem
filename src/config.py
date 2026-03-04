@@ -14,6 +14,12 @@ load_dotenv(_env_path)
 NVR_URL = os.getenv("NVR_URL", "http://localhost")
 NVR_USR = os.getenv("NVR_USR", "admin")
 NVR_PASS = os.getenv("NVR_PASS", "")
+NVR_CHANNELS = int(os.getenv("NVR_CHANNELS", "16"))
+NVR_CONNECT_TIMEOUT = int(os.getenv("NVR_CONNECT_TIMEOUT", "10"))
+NVR_READ_TIMEOUT = int(os.getenv("NVR_READ_TIMEOUT", "15"))
+NVR_STREAM_READ_TIMEOUT = int(os.getenv("NVR_STREAM_READ_TIMEOUT", "120"))
+NVR_RETRIES = int(os.getenv("NVR_RETRIES", "10"))
+NVR_RETRY_DELAY = int(os.getenv("NVR_RETRY_DELAY", "3"))
 
 # YOLO
 YOLO_MODEL = os.getenv("YOLO_MODEL", "yolov8n.pt")
@@ -51,6 +57,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 (DATA_DIR / "snapshot").mkdir(exist_ok=True)
 (DATA_DIR / "output").mkdir(exist_ok=True)
 (DATA_DIR / "events").mkdir(exist_ok=True)
+(DATA_DIR / "channels").mkdir(exist_ok=True)
 (DATA_DIR / "output" / "unrecognized").mkdir(parents=True, exist_ok=True)
 
 DB_PATH = DATA_DIR / "alerts.db"

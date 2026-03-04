@@ -1,4 +1,5 @@
 """Hikvision ISAPI client for autodiscovering channels and event types."""
+import time
 import xml.etree.ElementTree as ET
 from io import StringIO
 from typing import List, Optional
@@ -6,7 +7,16 @@ from typing import List, Optional
 import requests
 from requests.auth import HTTPDigestAuth
 
-from src.config import NVR_PASS, NVR_URL, NVR_USR
+from src.config import (
+    NVR_CHANNELS,
+    NVR_CONNECT_TIMEOUT,
+    NVR_PASS,
+    NVR_READ_TIMEOUT,
+    NVR_RETRIES,
+    NVR_RETRY_DELAY,
+    NVR_URL,
+    NVR_USR,
+)
 
 XML_NAMESPACE = "http://www.hikvision.com/ver20/XMLSchema"
 DEFAULT_HEADERS = {
@@ -24,14 +34,21 @@ def _session():
 
 
 def _get(path: str) -> Optional[str]:
-    """GET XML from NVR, return text or None."""
+    """GET XML from NVR, return text or None. Retries with backoff."""
     url = NVR_URL.rstrip("/") + path
-    try:
-        r = _session().get(url, timeout=10)
-        if r.status_code == 200:
-            return r.text
-    except Exception as e:
-        print("ISAPI GET error:", e)
+    timeout = (NVR_CONNECT_TIMEOUT, NVR_READ_TIMEOUT)
+    for attempt in range(NVR_RETRIES):
+        try:
+            r = _session().get(url, timeout=timeout)
+            if r.status_code == 200:
+                return r.text
+        except Exception as e:
+            if attempt < NVR_RETRIES - 1:
+                delay = NVR_RETRY_DELAY * (attempt + 1)
+                print(f"ISAPI GET retry {attempt + 1}/{NVR_RETRIES} in {delay}s: {e}")
+                time.sleep(delay)
+            else:
+                print("ISAPI GET error:", e)
     return None
 
 
@@ -49,9 +66,9 @@ def discover_channels() -> List[dict]:
         xml = _get("/ISAPI/ContentMgmt/InputProxy/channels")
         if xml:
             channels = _parse_input_proxy_channels(xml)
-    # Fallback: if no discovery works, assume channels 1-16 (typical NVR)
+    # Fallback: if no discovery works, assume channels 1 to NVR_CHANNELS
     if not channels:
-        for i in range(1, 17):
+        for i in range(1, NVR_CHANNELS + 1):
             channels.append({"hik_id": str(i), "name": f"Channel {i}", "enabled": True})
     return channels
 
@@ -147,16 +164,31 @@ def _parse_event_triggers_cap(xml: str) -> set:
 
 
 def download_snapshot(channel_id: str) -> Optional[bytes]:
-    """Download a snapshot image for the given channel."""
+    """Download a snapshot image for the given channel.
+    URL format: /ISAPI/Streaming/channels/{id}/picture e.g. 301 for channel 3.
+    """
+    # Channel format: 301 = channel 3 main, 101 = channel 1 main (channel*100+1)
+    if channel_id.isdigit():
+        n = int(channel_id)
+        stream_id = str(n * 100 + 1) if n < 100 else channel_id
+    else:
+        stream_id = f"{channel_id}01"
     url = (
         NVR_URL.rstrip("/")
-        + f"/ISAPI/Streaming/channels/{channel_id}01/picture?"
-        "videoResolutionWidth=1920&videoResolutionHeight=1080"
+        + f"/ISAPI/Streaming/channels/{stream_id}/picture?"
+        "videoResolutionWidth=640&videoResolutionHeight=480"
     )
-    try:
-        r = _session().get(url, timeout=(5, 60))
-        if r.status_code == 200:
-            return r.content
-    except Exception as e:
-        print("Snapshot download error:", e)
+    timeout = (NVR_CONNECT_TIMEOUT, NVR_READ_TIMEOUT)
+    for attempt in range(NVR_RETRIES):
+        try:
+            r = _session().get(url, timeout=timeout)
+            if r.status_code == 200:
+                return r.content
+        except Exception as e:
+            if attempt < NVR_RETRIES - 1:
+                delay = NVR_RETRY_DELAY * (attempt + 1)
+                print(f"Snapshot retry {attempt + 1}/{NVR_RETRIES} in {delay}s: {e}")
+                time.sleep(delay)
+            else:
+                print("Snapshot download error:", e)
     return None

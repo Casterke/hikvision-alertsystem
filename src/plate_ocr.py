@@ -50,11 +50,14 @@ def read_plate(image_path: str) -> Optional[str]:
         if result and result[0]:
             text = " ".join(line[1][0] for line in result[0])
     elif kind == "tesseract":
-        import cv2
-        img = cv2.imread(image_path)
-        if img is None:
+        try:
+            import cv2
+            img = cv2.imread(image_path)
+            if img is None:
+                return None
+            text = pytesseract.image_to_string(img)
+        except Exception:
             return None
-        text = pytesseract.image_to_string(img)
     text = re.sub(r"\s+", "", text.upper())
     match = re.search(PLATE_REGEX, text)
     if match:
