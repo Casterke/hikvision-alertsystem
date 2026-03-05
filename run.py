@@ -1,9 +1,11 @@
 """Main entry: ISAPI event stream + event sampler + web UI."""
 import logging
+import shutil
 import sys
 import threading
 import time
 from io import StringIO
+from pathlib import Path
 
 # Suppress HTTPS verification warnings (NVRs often use self-signed certs)
 import urllib3
@@ -18,6 +20,7 @@ from requests.auth import HTTPDigestAuth
 
 from src.live_feed import push_event, push_snapshots
 from src.config import (
+    DATA_DIR,
     NVR_CONNECT_TIMEOUT,
     NVR_PASS,
     NVR_RETRY_DELAY,
@@ -68,7 +71,12 @@ def _session():
 def _on_event_complete(event_id: str, channel_id: str, snapshot_paths: list):
     """Callback when event sampling is done."""
     push_snapshots(event_id, channel_id, snapshot_paths)
-    process_event(event_id, channel_id, snapshot_paths, "linedetection")
+    had_detections = process_event(event_id, channel_id, snapshot_paths, "linedetection")
+    if not had_detections:
+        # Nothing recognized — delete event folder permanently
+        event_dir = Path(snapshot_paths[0]).parent if snapshot_paths else DATA_DIR / "events" / event_id
+        if event_dir.exists():
+            shutil.rmtree(event_dir, ignore_errors=True)
 
 
 def _event_loop():

@@ -71,6 +71,17 @@ def init_db():
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS recorded_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE,
+                channel_id TEXT NOT NULL,
+                event_type TEXT NOT NULL DEFAULT 'linedetection',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                person_name TEXT,
+                plate TEXT,
+                snapshot_count INTEGER NOT NULL DEFAULT 0
+            );
         """)
         _seed_object_classes(conn)
         _seed_event_types(conn)
@@ -155,6 +166,27 @@ def log_notification(channel_id, event_type):
             "INSERT INTO notification_log (channel_id, event_type) VALUES (?, ?)",
             (channel_id, event_type)
         )
+
+
+def save_recorded_event(event_id, channel_id, event_type, person_name=None, plate=None, snapshot_count=0):
+    """Save a recorded event to the database (only call when something was detected)."""
+    with _conn() as conn:
+        conn.execute(
+            """INSERT INTO recorded_events (event_id, channel_id, event_type, person_name, plate, snapshot_count)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (event_id, channel_id, event_type, person_name, plate, snapshot_count)
+        )
+
+
+def get_recorded_events(limit=100, offset=0):
+    """Return recorded events for browsing, newest first."""
+    with _conn() as conn:
+        cur = conn.execute(
+            """SELECT event_id, channel_id, event_type, created_at, person_name, plate, snapshot_count
+               FROM recorded_events ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+            (limit, offset)
+        )
+        return [dict(r) for r in cur.fetchall()]
 
 
 def upsert_channels(channels):

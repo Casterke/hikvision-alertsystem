@@ -1,13 +1,16 @@
 """Flask web application."""
 import json
+import uuid
 
 from flask import Flask, Response, redirect, render_template_string, request, send_from_directory, url_for
 
 from src.config import DATA_DIR
+from src.image_process import process_image_debug
 from src.live_feed import get_feed
 from src.db import (
     _conn,
     get_enabled_object_classes,
+    get_recorded_events,
     init_db,
     COCO_CLASSES,
 )
@@ -26,7 +29,7 @@ INDEX_HTML = """
 <style>body{font-family:sans-serif;margin:2em;} nav a{margin-right:1em;}</style></head>
 <body>
 <nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a> 
-<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/settings">Settings</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
 <a href="/logout">Logout</a></nav>
 <h1>Dashboard</h1>
 <p>Hikvision Alert System. Configure channels, events, and objects above.</p>
@@ -73,7 +76,7 @@ LIVE_HTML = """
 .snap-group{display:inline-block;margin:8px;}</style></head>
 <body>
 <nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a> 
-<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/settings">Settings</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
 <a href="/logout">Logout</a></nav>
 <h1>Live Feed</h1>
 <p>Auto-refreshes every 2s</p>
@@ -117,7 +120,7 @@ td,th{border:1px solid #ccc;padding:6px;} nav a{margin-right:1em;}
 .channel-img{max-width:320px;max-height:180px;object-fit:contain;border:1px solid #ccc;}</style></head>
 <body>
 <nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a> 
-<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/settings">Settings</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
 <a href="/logout">Logout</a></nav>
 <h1>Channels</h1>
 <form method="post" action="/channels/refresh" style="display:inline"><button>Refresh from NVR</button></form>
@@ -211,10 +214,11 @@ EVENTS_HTML = """
 <style>body{font-family:sans-serif;margin:2em;} table{border-collapse:collapse;}
 td,th{border:1px solid #ccc;padding:6px;} nav a{margin-right:1em;}</style></head>
 <body>
-<nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a> 
-<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/settings">Settings</a>
+<nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a>
+<a href="/events/history">Event History</a> <a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
 <a href="/logout">Logout</a></nav>
 <h1>Event Types</h1>
+<p><a href="/events/history">Browse recorded events</a> (person/car detections)</p>
 <table><tr><th>Name</th><th>Enabled</th></tr>
 {% for e in events %}
 <tr><td>{{ e.name }}</td>
@@ -254,6 +258,57 @@ def event_toggle(eid):
     return redirect(url_for("events"))
 
 
+EVENTS_HISTORY_HTML = """
+<!DOCTYPE html>
+<html><head><title>Event History</title>
+<style>body{font-family:sans-serif;margin:2em;} table{border-collapse:collapse;}
+td,th{border:1px solid #ccc;padding:6px;} nav a{margin-right:1em;}
+.event-preview{display:flex;flex-wrap:wrap;gap:4px;} .event-preview img{max-width:120px;max-height:80px;object-fit:contain;border:1px solid #ccc;}
+</style></head>
+<body>
+<nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a>
+<a href="/events/history">Event History</a> <a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
+<a href="/logout">Logout</a></nav>
+<h1>Event History</h1>
+<p>Recorded events with person or vehicle detections. Events with nothing recognized are automatically deleted.</p>
+<table><tr><th>Time</th><th>Channel</th><th>Event Type</th><th>Person</th><th>Plate</th><th>Snapshots</th><th>Preview</th></tr>
+{% for e in events %}
+<tr>
+<td>{{ e.created_at }}</td>
+<td>{{ e.channel_id }}</td>
+<td>{{ e.event_type }}</td>
+<td>{{ e.person_name or '—' }}</td>
+<td>{{ e.plate or '—' }}</td>
+<td>{{ e.snapshot_count }}</td>
+<td class="event-preview">
+  {% for f in e.snapshot_files[:3] %}
+  <img src="/events/snapshot/{{ e.event_id }}/{{ f }}" alt="" onerror="this.style.display='none'">
+  {% endfor %}
+</td>
+</tr>
+{% endfor %}
+</table>
+{% if not events %}
+<p><em>No recorded events yet.</em></p>
+{% endif %}
+<p><a href="/events">Back to Event Types</a></p>
+</body></html>
+"""
+
+
+@app.route("/events/history")
+@app.login_required
+def events_history():
+    events_list = get_recorded_events(limit=100)
+    events_dir = DATA_DIR / "events"
+    for e in events_list:
+        event_folder = events_dir / e["event_id"]
+        e["snapshot_files"] = []
+        if event_folder.exists():
+            e["snapshot_files"] = sorted(p.name for p in event_folder.glob("*.jpg") if p.is_file() and not p.name.startswith("."))
+    return render_template_string(EVENTS_HISTORY_HTML, events=events_list)
+
+
 OBJECTS_HTML = """
 <!DOCTYPE html>
 <html><head><title>Objects</title>
@@ -261,7 +316,7 @@ OBJECTS_HTML = """
 nav a{margin-right:1em;}</style></head>
 <body>
 <nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a> 
-<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/settings">Settings</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
 <a href="/logout">Logout</a></nav>
 <h1>Object Classes (YOLO)</h1>
 <form method="post">
@@ -300,7 +355,7 @@ FACES_HTML = """
 td,th{border:1px solid #ccc;padding:6px;} nav a{margin-right:1em;}</style></head>
 <body>
 <nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a> 
-<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/settings">Settings</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
 <a href="/logout">Logout</a></nav>
 <h1>Face Recognition Library</h1>
 <form method="post" enctype="multipart/form-data" action="/faces/add">
@@ -358,7 +413,7 @@ SETTINGS_HTML = """
 <style>body{font-family:sans-serif;margin:2em;} nav a{margin-right:1em;}</style></head>
 <body>
 <nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a> 
-<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/settings">Settings</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
 <a href="/logout">Logout</a></nav>
 <h1>Settings</h1>
 <p>NVR URL, credentials, and notification settings are in .env</p>
@@ -370,6 +425,137 @@ SETTINGS_HTML = """
 @app.login_required
 def settings():
     return render_template_string(SETTINGS_HTML)
+
+
+DEBUG_HTML = """
+<!DOCTYPE html>
+<html><head><title>Debug</title>
+<style>body{font-family:sans-serif;margin:2em;} nav a{margin-right:1em;}
+.debug-upload{margin:1em 0;padding:1em;border:1px solid #ccc;}</style></head>
+<body>
+<nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
+<a href="/logout">Logout</a></nav>
+<h1>Debug Pipeline</h1>
+<p>Upload an image to run it through the same YOLO/face/plate pipeline as snapshots. No notifications are sent.</p>
+<form method="post" enctype="multipart/form-data" action="/debug" class="debug-upload">
+  <input type="file" name="image" accept="image/*" required>
+  <button type="submit">Process</button>
+</form>
+</body></html>
+"""
+
+DEBUG_RESULT_HTML = """
+<!DOCTYPE html>
+<html><head><title>Debug Result</title>
+<style>body{font-family:sans-serif;margin:2em;} nav a{margin-right:1em;}
+.debug-img{max-width:100%;max-height:400px;object-fit:contain;border:1px solid #ccc;margin:8px;}
+.debug-section{margin:1em 0;} .detection{display:flex;align-items:center;gap:1em;margin:8px 0;padding:8px;border:1px solid #eee;}
+.detection img{max-width:160px;max-height:120px;object-fit:contain;}</style></head>
+<body>
+<nav><a href="/">Dashboard</a> <a href="/live">Live</a> <a href="/channels">Channels</a> <a href="/events">Events</a>
+<a href="/objects">Objects</a> <a href="/faces">Faces</a> <a href="/debug">Debug</a> <a href="/settings">Settings</a>
+<a href="/logout">Logout</a></nav>
+<h1>Debug Result</h1>
+{% if error %}
+<p style="color:red">{{ error }}</p>
+{% else %}
+<div class="debug-section">
+<h2>Original</h2>
+<img class="debug-img" src="/debug/image/{{ debug_id }}/{{ original_path }}" alt="Original">
+</div>
+{% if annotated_path %}
+<div class="debug-section">
+<h2>Annotated</h2>
+<img class="debug-img" src="/debug/image/{{ debug_id }}/{{ annotated_path }}" alt="Annotated">
+</div>
+{% endif %}
+<div class="debug-section">
+<h2>Detections ({{ detections|length }})</h2>
+{% if detections %}
+{% for d in detections %}
+<div class="detection">
+<img src="/debug/image/{{ debug_id }}/{{ d.crop }}" alt="{{ d.class }}">
+<div>
+<strong>{{ d.class }}</strong>
+{% if d.face_match is defined %}<br>Face: {{ d.face_match }}{% endif %}
+{% if d.plate is defined %}<br>Plate: {{ d.plate }}{% endif %}
+{% if d.plate_raw is defined %}<br><small>OCR saw: {{ d.plate_raw }}</small>{% endif %}
+</div>
+</div>
+{% endfor %}
+{% else %}
+<p>No detections. Enable person/car in <a href="/objects">Objects</a>.</p>
+{% endif %}
+</div>
+{% endif %}
+<p><a href="/debug">Upload another</a></p>
+</body></html>
+"""
+
+
+@app.route("/debug", methods=["GET", "POST"])
+@app.login_required
+def debug():
+    if request.method == "POST":
+        f = request.files.get("image")
+        if f and f.filename:
+            debug_id = str(uuid.uuid4())
+            debug_dir = DATA_DIR / "debug" / debug_id
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            original_path = debug_dir / "original.jpg"
+            f.save(str(original_path))
+            result = process_image_debug(str(original_path))
+            return redirect(url_for("debug_result", debug_id=result["debug_id"]))
+        return redirect(url_for("debug"))
+    return render_template_string(DEBUG_HTML)
+
+
+@app.route("/debug/result/<debug_id>")
+@app.login_required
+def debug_result(debug_id):
+    debug_dir = DATA_DIR / "debug" / debug_id
+    if not debug_dir.exists():
+        return render_template_string(
+            DEBUG_RESULT_HTML, error="Result not found", debug_id=debug_id,
+            original_path="original.jpg", annotated_path=None, detections=[]
+        )
+    result_json = debug_dir / "result.json"
+    if result_json.exists():
+        result = json.loads(result_json.read_text())
+    else:
+        result = {
+            "original_path": "original.jpg",
+            "annotated_path": "annotated.jpg" if (debug_dir / "annotated.jpg").exists() else None,
+            "detections": [],
+        }
+        for p in sorted(debug_dir.glob("*.jpg")):
+            if p.name in ("original.jpg", "annotated.jpg"):
+                continue
+            parts = p.stem.split("_", 1)
+            result["detections"].append({
+                "class": parts[1] if len(parts) > 1 else "unknown",
+                "crop": p.name,
+            })
+    return render_template_string(
+        DEBUG_RESULT_HTML,
+        error=result.get("error"),
+        debug_id=debug_id,
+        original_path=result.get("original_path", "original.jpg"),
+        annotated_path=result.get("annotated_path"),
+        detections=result.get("detections", []),
+    )
+
+
+@app.route("/debug/image/<debug_id>/<path:filename>")
+@app.login_required
+def debug_image(debug_id, filename):
+    """Serve debug image."""
+    debug_dir = DATA_DIR / "debug" / debug_id
+    path = debug_dir / filename
+    if path.exists() and path.is_file():
+        return send_from_directory(str(debug_dir), filename, mimetype="image/jpeg")
+    return "", 404
 
 
 def run_web(host="0.0.0.0", port=5000):

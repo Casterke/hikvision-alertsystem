@@ -27,6 +27,7 @@ YOLO_MODEL = os.getenv("YOLO_MODEL", "yolov8n.pt")
 # Notifications
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+NOTIFICATION_COOLDOWN = int(os.getenv("NOTIFICATION_COOLDOWN", "120"))
 MQTT_BROKER = os.getenv("MQTT_BROKER", "")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "hikvision/alerts")
@@ -40,8 +41,11 @@ EVENT_MAX_DURATION = int(os.getenv("EVENT_MAX_DURATION", "120"))
 
 # Recognition
 FACE_MATCH_THRESHOLD = float(os.getenv("FACE_MATCH_THRESHOLD", "0.6"))
-PLATE_REGEX = os.getenv("PLATE_REGEX", r"[A-Z0-9\-]{5,12}")
-
+# YOLO model for license plate detection (HuggingFace or local path)
+PLATE_MODEL = os.getenv(
+    "PLATE_MODEL",
+    "https://huggingface.co/Koushim/yolov8-license-plate-detection/resolve/main/best.pt",
+)
 # Web auth
 WEB_USER = os.getenv("WEB_USER", "")
 WEB_PASSWORD = os.getenv("WEB_PASSWORD", "")
@@ -59,5 +63,6 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 (DATA_DIR / "events").mkdir(exist_ok=True)
 (DATA_DIR / "channels").mkdir(exist_ok=True)
 (DATA_DIR / "output" / "unrecognized").mkdir(parents=True, exist_ok=True)
+(DATA_DIR / "debug").mkdir(exist_ok=True)
 
 DB_PATH = DATA_DIR / "alerts.db"
