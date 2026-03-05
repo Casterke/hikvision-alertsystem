@@ -70,6 +70,9 @@ def discover_channels() -> List[dict]:
     if not channels:
         for i in range(1, NVR_CHANNELS + 1):
             channels.append({"hik_id": str(i), "name": f"Channel {i}", "enabled": True})
+    else:
+        # Cap discovered channels to NVR_CHANNELS
+        channels = channels[:NVR_CHANNELS]
     return channels
 
 

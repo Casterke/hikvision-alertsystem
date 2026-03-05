@@ -158,8 +158,15 @@ def log_notification(channel_id, event_type):
 
 
 def upsert_channels(channels):
-    """Insert or update channels from discovery."""
+    """Insert or update channels from discovery. Removes channels not in the list."""
     with _conn() as conn:
+        hik_ids = [ch["hik_id"] for ch in channels]
+        if hik_ids:
+            placeholders = ",".join("?" * len(hik_ids))
+            conn.execute(
+                f"DELETE FROM channels WHERE hik_id NOT IN ({placeholders})",
+                hik_ids,
+            )
         for ch in channels:
             conn.execute(
                 """INSERT INTO channels (hik_id, name, enabled) VALUES (?, ?, ?)
